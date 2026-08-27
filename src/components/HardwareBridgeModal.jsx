@@ -21,6 +21,7 @@ export default function HardwareBridgeModal({ isOpen, onClose, devices = [], com
   const [deviceIp, setDeviceIp] = useState('192.168.137.188');
   const [copiedCode, setCopiedCode] = useState(false);
   const [showIpManual, setShowIpManual] = useState(false);
+  const [showSnManual, setShowSnManual] = useState(false);
 
   if (!isOpen) return null;
 
@@ -177,21 +178,49 @@ export default function HardwareBridgeModal({ isOpen, onClose, devices = [], com
               {/* Device Selector & IP Input */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                 <div>
-                  <label className="block text-slate-400 mb-1 font-semibold">Select Device Serial Number:</label>
-                  <select
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-slate-400 font-semibold">Device Serial Number (SN / ID):</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowSnManual(!showSnManual)}
+                      className="inline-flex items-center space-x-1 text-[11px] text-sky-400 hover:text-sky-300 transition"
+                      title="How to find your machine's Serial Number on screen"
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                      <span>How to find SN?</span>
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    list="device-sn-suggestions"
                     value={selectedDeviceSn}
                     onChange={(e) => setSelectedDeviceSn(e.target.value)}
-                    className="w-full bg-dark-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-500"
-                  >
+                    placeholder="e.g. NFZ8235301513 or BMX-101"
+                    className="w-full bg-dark-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-sky-500"
+                  />
+                  <datalist id="device-sn-suggestions">
                     {devices.map(d => (
                       <option key={d.id} value={d.serialNumber}>
                         {d.name} ({d.serialNumber})
                       </option>
                     ))}
-                    {!devices.some(d => d.serialNumber === 'NFZ8235301513') && (
-                      <option value="NFZ8235301513">eSSL X 2008 (NFZ8235301513)</option>
-                    )}
-                  </select>
+                  </datalist>
+
+                  {/* Expandable Manual for Serial Number */}
+                  {showSnManual && (
+                    <div className="mt-2.5 p-3 rounded-xl bg-sky-950/40 border border-sky-500/30 text-sky-200 text-[11px] space-y-1.5 animate-fade-in">
+                      <div className="font-bold text-white flex items-center space-x-1.5">
+                        <Info className="w-3.5 h-3.5 text-sky-400" />
+                        <span>How to find Serial Number on the Machine:</span>
+                      </div>
+                      <ol className="list-decimal list-inside space-y-1 text-slate-300">
+                        <li>Press <strong className="text-white">M/OK</strong> button on the biometric machine.</li>
+                        <li>Navigate to <strong className="text-white">System Info ➔ Device Info</strong> (or read the barcode sticker on the back).</li>
+                        <li>Look for <strong className="text-sky-300">Serial Number / SN</strong> (e.g. <code className="bg-dark-950 px-1 py-0.5 rounded text-sky-300 font-mono">NFZ8235301513</code>).</li>
+                        <li>Type that exact Serial Number into this field.</li>
+                      </ol>
+                    </div>
+                  )}
                 </div>
 
                 <div>
