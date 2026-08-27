@@ -263,30 +263,57 @@ export default function HardwareBridgeModal({ isOpen, onClose, devices = [], com
                 </div>
               </div>
 
-              {/* Quick Downloads */}
-              <div className="flex flex-wrap items-center gap-2 pt-2">
+              {/* 1-Click Download Package */}
+              <div className="p-4 bg-gradient-to-r from-sky-950/60 to-dark-900 border border-sky-500/30 rounded-xl space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h5 className="font-bold text-sm text-white flex items-center space-x-2">
+                      <Download className="w-4 h-4 text-sky-400" />
+                      <span>Download 1-Click Agent Package for Client PC:</span>
+                    </h5>
+                    <p className="text-slate-400 text-[11px] mt-0.5">
+                      Includes pre-configured <code className="text-sky-300 font-mono">config.json</code>, auto-installer, and 1-click launcher.
+                    </p>
+                  </div>
+                  <a
+                    href="/biomax-attendance-agent.zip"
+                    download="biomax-attendance-agent.zip"
+                    className="inline-flex items-center justify-center space-x-2 px-5 py-2.5 bg-sky-600 hover:bg-sky-500 text-white rounded-xl font-bold shadow-lg shadow-sky-600/30 transition flex-shrink-0 text-xs"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>Download Agent (.ZIP)</span>
+                  </a>
+                </div>
+
+                {/* 2-Step Client Manual */}
+                <div className="pt-2 border-t border-slate-800/80 grid grid-cols-1 sm:grid-cols-2 gap-3 text-[11px]">
+                  <div className="flex items-start space-x-2">
+                    <span className="w-5 h-5 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center font-bold flex-shrink-0 text-[10px]">1</span>
+                    <span className="text-slate-300">Unzip the downloaded folder on the client's reception PC.</span>
+                  </div>
+                  <div className="flex items-start space-x-2">
+                    <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-bold flex-shrink-0 text-[10px]">2</span>
+                    <span className="text-slate-300">Double-click <strong className="text-emerald-400">start-agent.bat</strong> — it connects automatically!</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Advanced Custom Config Downloads */}
+              <div className="flex flex-wrap items-center gap-2 pt-1">
                 <button
                   onClick={handleDownloadConfig}
-                  className="flex items-center space-x-1.5 px-3.5 py-2 bg-sky-600/20 hover:bg-sky-600/30 text-sky-300 border border-sky-500/30 rounded-lg font-semibold transition"
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-dark-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-lg text-[11px] font-medium transition"
                 >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download config.json</span>
-                </button>
-
-                <button
-                  onClick={handleDownloadBat}
-                  className="flex items-center space-x-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg font-semibold transition"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  <span>Download start-agent.bat</span>
+                  <Download className="w-3 h-3" />
+                  <span>Download Custom config.json only</span>
                 </button>
 
                 <button
                   onClick={() => handleCopy(`cd agent\nnode agent.js`)}
-                  className="flex items-center space-x-1.5 px-3.5 py-2 bg-dark-900 hover:bg-slate-800 text-slate-300 border border-slate-700 rounded-lg font-semibold transition ml-auto"
+                  className="flex items-center space-x-1.5 px-3 py-1.5 bg-dark-900 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-700 rounded-lg text-[11px] font-medium transition ml-auto"
                 >
-                  {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                  <span>{copiedCode ? 'Copied Command!' : 'Copy Terminal Command'}</span>
+                  {copiedCode ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedCode ? 'Copied Command' : 'Copy Command'}</span>
                 </button>
               </div>
             </div>
