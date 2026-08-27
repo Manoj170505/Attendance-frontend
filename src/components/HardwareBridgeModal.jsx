@@ -11,7 +11,8 @@ import {
   ShieldCheck,
   Zap,
   Activity,
-  Layers
+  Layers,
+  Info
 } from 'lucide-react';
 
 export default function HardwareBridgeModal({ isOpen, onClose, devices = [], companies = [] }) {
@@ -19,6 +20,7 @@ export default function HardwareBridgeModal({ isOpen, onClose, devices = [], com
   const [selectedDeviceSn, setSelectedDeviceSn] = useState(devices[0]?.serialNumber || 'NFZ8235301513');
   const [deviceIp, setDeviceIp] = useState('192.168.137.188');
   const [copiedCode, setCopiedCode] = useState(false);
+  const [showIpManual, setShowIpManual] = useState(false);
 
   if (!isOpen) return null;
 
@@ -193,7 +195,18 @@ export default function HardwareBridgeModal({ isOpen, onClose, devices = [], com
                 </div>
 
                 <div>
-                  <label className="block text-slate-400 mb-1 font-semibold">Device Local IP (on Ethernet):</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-slate-400 font-semibold">Device Local IP (on Ethernet):</label>
+                    <button
+                      type="button"
+                      onClick={() => setShowIpManual(!showIpManual)}
+                      className="inline-flex items-center space-x-1 text-[11px] text-sky-400 hover:text-sky-300 transition"
+                      title="How to find your machine's IP on screen"
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                      <span>How to find IP?</span>
+                    </button>
+                  </div>
                   <input
                     type="text"
                     value={deviceIp}
@@ -201,6 +214,23 @@ export default function HardwareBridgeModal({ isOpen, onClose, devices = [], com
                     placeholder="192.168.137.188"
                     className="w-full bg-dark-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-sky-500"
                   />
+
+                  {/* Expandable Manual for Local Ethernet IP */}
+                  {showIpManual && (
+                    <div className="mt-2.5 p-3 rounded-xl bg-sky-950/40 border border-sky-500/30 text-sky-200 text-[11px] space-y-1.5 animate-fade-in">
+                      <div className="font-bold text-white flex items-center space-x-1.5">
+                        <Info className="w-3.5 h-3.5 text-sky-400" />
+                        <span>Manual: How to get Device IP & Port on screen</span>
+                      </div>
+                      <ol className="list-decimal list-inside space-y-1 text-slate-300">
+                        <li>Press <strong className="text-white">M/OK</strong> button on the eSSL/ZKTeco machine.</li>
+                        <li>Navigate to <strong className="text-white">Comm. (Communication) ➔ Ethernet</strong> (or Network).</li>
+                        <li>Read the <strong className="text-sky-300">IP Address</strong> field (e.g. <code className="bg-dark-950 px-1 py-0.5 rounded text-sky-300 font-mono">192.168.137.188</code>).</li>
+                        <li>Enter that exact number in the box above.</li>
+                        <li>Under <strong className="text-white">Comm. ➔ PC Connection</strong>, ensure <strong className="text-emerald-300">TCP Comm.Port</strong> is set to <code className="bg-dark-950 px-1 py-0.5 rounded text-emerald-300 font-mono">4370</code>.</li>
+                      </ol>
+                    </div>
+                  )}
                 </div>
               </div>
 
