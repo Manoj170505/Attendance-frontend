@@ -28,7 +28,8 @@ const os = require('os');
 // Defensive patch for node-zklib to prevent null subarray crash on device timeout
 try {
   const ZKLibTCP = require('node-zklib/zklibtcp');
-  const { createTCPHeader, decodeTCPHeader, COMMANDS, MAX_CHUNK, checkNotEventTCP } = require('node-zklib/zkcombo');
+  const { createTCPHeader, decodeTCPHeader, checkNotEventTCP } = require('node-zklib/utils');
+  const { COMMANDS, MAX_CHUNK } = require('node-zklib/constants');
 
   ZKLibTCP.prototype.readWithBuffer = function (reqData, cb) {
     var self = this;
