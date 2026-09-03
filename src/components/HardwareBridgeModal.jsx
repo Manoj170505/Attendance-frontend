@@ -25,6 +25,105 @@ const path = require('path');
 const net = require('net');
 const os = require('os');
 
+// Defensive patch for node-zklib to prevent null subarray crash on device timeout
+try {
+  const ZKLibTCP = require('node-zklib/zklibtcp');
+  const { createTCPHeader, decodeTCPHeader, COMMANDS, MAX_CHUNK, checkNotEventTCP } = require('node-zklib/zkcombo');
+
+  ZKLibTCP.prototype.readWithBuffer = function (reqData, cb) {
+    var self = this;
+    return new Promise(function (resolve, reject) {
+      self.replyId++;
+      var buf = createTCPHeader(COMMANDS.CMD_DATA_WRRQ, self.sessionId, self.replyId, reqData);
+
+      self.requestData(buf)
+        .then(function (reply) {
+          if (!reply || reply.length < 16) {
+            return reject(new Error('Device returned empty or invalid response buffer on port 4370'));
+          }
+
+          var header = decodeTCPHeader(reply.subarray(0, 16));
+          switch (header.commandId) {
+            case COMMANDS.CMD_DATA: {
+              return resolve({ data: reply.subarray(16), mode: 8 });
+            }
+            case COMMANDS.CMD_ACK_OK:
+            case COMMANDS.CMD_PREPARE_DATA: {
+              var recvData = reply.subarray(16);
+              if (!recvData || recvData.length < 5) {
+                return reject(new Error('Device response payload too short'));
+              }
+              var size = recvData.readUIntLE(1, 4);
+              var remain = size % MAX_CHUNK;
+              var numberChunks = Math.round(size - remain) / MAX_CHUNK;
+              var totalPackets = numberChunks + (remain > 0 ? 1 : 0);
+              var replyData = Buffer.from([]);
+              var totalBuffer = Buffer.from([]);
+              var realTotalBuffer = Buffer.from([]);
+
+              var timeout = 10000;
+              var timer = setTimeout(function () {
+                internalCallback(replyData, new Error('TIMEOUT WHEN RECEIVING PACKET'));
+              }, timeout);
+
+              var internalCallback = function (data, err) {
+                if (timer) clearTimeout(timer);
+                resolve({ data: data, err: err || null });
+              };
+
+              var handleOnData = function (packet) {
+                if (checkNotEventTCP(packet)) return;
+                if (timer) clearTimeout(timer);
+                timer = setTimeout(function () {
+                  internalCallback(replyData, new Error('TIMEOUT ON PACKETS REMAINING: ' + totalPackets));
+                }, timeout);
+
+                totalBuffer = Buffer.concat([totalBuffer, packet]);
+                var packetLength = totalBuffer.readUIntLE(4, 2);
+                if (totalBuffer.length >= 8 + packetLength) {
+                  realTotalBuffer = Buffer.concat([realTotalBuffer, totalBuffer.subarray(16, 8 + packetLength)]);
+                  totalBuffer = totalBuffer.subarray(8 + packetLength);
+
+                  if (
+                    (totalPackets > 1 && realTotalBuffer.length === MAX_CHUNK + 8) ||
+                    (totalPackets === 1 && realTotalBuffer.length === remain + 8)
+                  ) {
+                    replyData = Buffer.concat([replyData, realTotalBuffer.subarray(8)]);
+                    totalBuffer = Buffer.from([]);
+                    realTotalBuffer = Buffer.from([]);
+
+                    totalPackets -= 1;
+                    if (cb) cb(replyData.length, size);
+
+                    if (totalPackets <= 0) {
+                      internalCallback(replyData);
+                    }
+                  }
+                }
+              };
+
+              self.socket.on('data', handleOnData);
+
+              for (var i = 0; i < totalPackets; i++) {
+                var sizeReq = i === totalPackets - 1 ? remain : MAX_CHUNK;
+                self.sendChunkRequest(i * MAX_CHUNK, sizeReq);
+              }
+              break;
+            }
+            default: {
+              return reject(new Error('Invalid command response code: ' + header.commandId));
+            }
+          }
+        })
+        .catch(function (err) {
+          reject(err);
+        });
+    });
+  };
+} catch (patchErr) {
+  console.warn('⚠️ Could not apply ZKLibTCP monkey-patch:', patchErr.message);
+}
+
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 const CACHE_PATH = path.join(__dirname, 'synced_cache.json');
 
