@@ -40,7 +40,7 @@ let config = {
 if (fs.existsSync(CONFIG_PATH)) {
   try {
     const raw = fs.readFileSync(CONFIG_PATH, 'utf8');
-    config = { ...config, ...JSON.parse(raw) };
+    config = Object.assign({}, config, JSON.parse(raw));
   } catch (err) {
     console.error('⚠️ Could not parse config.json, using defaults:', err.message);
   }
@@ -194,7 +194,8 @@ async function pushPunchToCloud(record) {
       return true;
     }
   } catch (err) {
-    console.error(\`❌ [CLOUD SYNC ERROR] Failed to push punch:\`, err.response?.data?.error || err.message);
+    const errMsg = (err.response && err.response.data && err.response.data.error) || err.message;
+    console.error(\`❌ [CLOUD SYNC ERROR] Failed to push punch:\`, errMsg);
     return false;
   }
   return false;
