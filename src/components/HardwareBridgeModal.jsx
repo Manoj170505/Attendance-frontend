@@ -18,15 +18,13 @@ import {
   FileCode
 } from 'lucide-react';
 
-const AGENT_JS_CODE = `import ZKLib from 'node-zklib';
-import axios from 'axios';
-import fs from 'fs';
-import path from 'path';
-import net from 'net';
-import os from 'os';
-import { fileURLToPath } from 'url';
+const AGENT_JS_CODE = `const ZKLib = require('node-zklib');
+const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
+const net = require('net');
+const os = require('os');
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_PATH = path.join(__dirname, 'config.json');
 const CACHE_PATH = path.join(__dirname, 'synced_cache.json');
 
@@ -341,7 +339,6 @@ const PACKAGE_JSON_CONTENT = JSON.stringify(
     version: '1.0.0',
     description: 'Universal Local Sync Agent for eSSL, ZKTeco, and BioMax Biometric Terminals',
     main: 'agent.js',
-    type: 'module',
     scripts: {
       start: 'node agent.js'
     },
