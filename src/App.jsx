@@ -13,13 +13,9 @@ import {
   attendanceApi
 } from './services/api';
 import {
-  Activity,
-  Building,
-  HardDrive,
-  Users,
   Clock,
-  Plus,
-  RefreshCw
+  HardDrive,
+  Users
 } from 'lucide-react';
 
 export default function App() {
@@ -31,7 +27,7 @@ export default function App() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Active view tab: 'feed' | 'devices' | 'employees' | 'companies'
+  // Active view tab: 'feed' | 'devices' | 'employees'
   const [activeTab, setActiveTab] = useState('feed');
 
   // Modals
@@ -59,7 +55,6 @@ export default function App() {
       if (compRes.success) {
         const availableCompanies = compRes.data || [];
         setCompanies(availableCompanies);
-        // If current selected company no longer exists, reset to all
         if (selectedCompanyId && !availableCompanies.some(c => c.id === selectedCompanyId)) {
           setSelectedCompanyId(null);
         }
@@ -80,12 +75,11 @@ export default function App() {
     fetchData();
   }, [fetchData]);
 
-  // Auto-polling interval (every 5 seconds for real-time punch streaming)
+  // Auto-polling interval
   useEffect(() => {
     if (!isAutoRefreshing) return;
 
     const interval = setInterval(() => {
-      // Refresh logs, stats, and device status quietly
       Promise.all([
         attendanceApi.getLogs({
           companyId: selectedCompanyId || undefined,
@@ -125,6 +119,11 @@ export default function App() {
     fetchData();
   };
 
+  const handleUpdateEmployee = async (id, data) => {
+    await employeeApi.update(id, data);
+    fetchData();
+  };
+
   const handleDeleteEmployee = async (id) => {
     if (window.confirm('Delete this employee record?')) {
       await employeeApi.delete(id);
@@ -135,7 +134,7 @@ export default function App() {
   const selectedCompany = companies.find(c => c.id === selectedCompanyId);
 
   return (
-    <div className="min-h-screen flex flex-col bg-dark-950 text-slate-100">
+    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900">
       {/* Top Navigation */}
       <Navbar
         companies={companies}
@@ -162,48 +161,48 @@ export default function App() {
         />
 
         {/* Tab Navigation */}
-        <div className="flex items-center space-x-2 border-b border-slate-800 pb-3 mb-6 overflow-x-auto">
+        <div className="flex items-center space-x-2 border-b border-slate-200 pb-3 mb-6 overflow-x-auto">
           <button
             onClick={() => setActiveTab('feed')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition ${
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
               activeTab === 'feed'
-                ? 'bg-brand-600/20 text-brand-400 border border-brand-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                ? 'bg-brand-50 text-brand-700 border border-brand-300 shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <Clock className="w-4 h-4" />
+            <Clock className="w-4 h-4 text-brand-600" />
             <span>Live Attendance Feed</span>
-            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-brand-500/20 text-brand-300">
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-brand-100 text-brand-800 font-bold">
               {attendanceLogs.length}
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab('devices')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition ${
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
               activeTab === 'devices'
-                ? 'bg-sky-600/20 text-sky-400 border border-sky-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                ? 'bg-sky-50 text-sky-700 border border-sky-300 shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <HardDrive className="w-4 h-4" />
+            <HardDrive className="w-4 h-4 text-sky-600" />
             <span>Biometric Terminals</span>
-            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-sky-500/20 text-sky-300">
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-sky-100 text-sky-800 font-bold">
               {devices.length}
             </span>
           </button>
 
           <button
             onClick={() => setActiveTab('employees')}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-semibold transition ${
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg text-xs font-bold transition ${
               activeTab === 'employees'
-                ? 'bg-indigo-600/20 text-indigo-400 border border-indigo-500/30'
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                ? 'bg-indigo-50 text-indigo-700 border border-indigo-300 shadow-2xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
             }`}
           >
-            <Users className="w-4 h-4" />
-            <span>Enrolled Staff</span>
-            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-indigo-500/20 text-indigo-300">
+            <Users className="w-4 h-4 text-indigo-600" />
+            <span>Staff Directory</span>
+            <span className="ml-1 px-1.5 py-0.5 rounded-full text-[10px] bg-indigo-100 text-indigo-800 font-bold">
               {employees.length}
             </span>
           </button>
@@ -214,6 +213,9 @@ export default function App() {
           <AttendanceFeed
             logs={attendanceLogs}
             loading={loading}
+            companies={companies}
+            selectedCompanyId={selectedCompanyId}
+            onSelectCompany={setSelectedCompanyId}
             onRefresh={fetchData}
           />
         )}
@@ -236,13 +238,14 @@ export default function App() {
             companies={companies}
             selectedCompanyId={selectedCompanyId}
             onCreateEmployee={handleCreateEmployee}
+            onUpdateEmployee={handleUpdateEmployee}
             onDeleteEmployee={handleDeleteEmployee}
           />
         )}
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-slate-800/80 py-4 bg-dark-900/50">
+      <footer className="border-t border-slate-200 py-4 bg-white">
         <div className="max-w-7xl mx-auto px-4 text-center text-xs text-slate-500 flex flex-col sm:flex-row items-center justify-between gap-2">
           <div>
             BioMax & eSSL ADMS Protocol Engine • Multi-Tenant MongoDB Atlas & Prisma
@@ -250,15 +253,15 @@ export default function App() {
           <div className="flex items-center space-x-4">
             <button
               onClick={() => setIsGuideOpen(true)}
-              className="text-brand-400 hover:underline"
+              className="text-brand-600 font-semibold hover:underline"
             >
-              Device Connection Guide
+              Device Connection Hub
             </button>
             <button
               onClick={() => setIsSimulatorOpen(true)}
-              className="text-amber-400 hover:underline"
+              className="text-amber-700 font-semibold hover:underline"
             >
-              Simulator
+              Hardware Simulator
             </button>
           </div>
         </div>
