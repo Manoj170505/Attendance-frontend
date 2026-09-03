@@ -205,8 +205,13 @@ let lastUserSyncTime = 0;
 const USER_SYNC_INTERVAL_MS = 60 * 1000;
 
 async function syncUsersFromDevice() {
+  if (!isConnected || !zk) return;
   try {
-    const usersData = await zk.getUsers();
+    const usersData = await zk.getUsers().catch((err) => {
+      console.warn(\`⚠️ [USER SYNC WARNING] Device returned empty or timed out on getUsers:\`, err ? err.message : 'timeout');
+      return null;
+    });
+
     if (usersData && usersData.data && Array.isArray(usersData.data) && usersData.data.length > 0) {
       const usersToSync = usersData.data.map(u => ({
         employeeId: String(u.userId || u.deviceUserId || u.uid || '').trim(),
@@ -230,7 +235,7 @@ async function syncUsersFromDevice() {
       }
     }
   } catch (err) {
-    console.warn(\`⚠️ [USER SYNC WARNING] Could not fetch/sync device users: \${err.message}\`);
+    console.warn(\`⚠️ [USER SYNC WARNING] Could not fetch/sync device users: \${err ? err.message : err}\`);
   }
 }
 
@@ -243,11 +248,14 @@ async function sendHeartbeat() {
 }
 
 async function pollAttendanceLogs() {
-  if (isPolling || !isConnected) return;
+  if (isPolling || !isConnected || !zk) return;
   isPolling = true;
 
   try {
-    const logs = await zk.getAttendances();
+    const logs = await zk.getAttendances().catch((err) => {
+      console.warn(\`⚠️ [POLL WARNING] Device returned empty or timed out on getAttendances:\`, err ? err.message : 'timeout');
+      return null;
+    });
 
     if (logs && logs.data && Array.isArray(logs.data)) {
       let newPunches = 0;
@@ -270,8 +278,8 @@ async function pollAttendanceLogs() {
       }
     }
   } catch (err) {
-    console.warn(\`⚠️ [POLL WARNING] \${err.message}\`);
-    if (err.message && (err.message.includes('timeout') || err.message.includes('closed') || err.message.includes('ECONNRESET'))) {
+    console.warn(\`⚠️ [POLL WARNING] \${err ? err.message : err}\`);
+    if (err && err.message && (err.message.includes('timeout') || err.message.includes('closed') || err.message.includes('ECONNRESET'))) {
       isConnected = false;
     }
   } finally {
@@ -294,7 +302,7 @@ async function connectToDevice() {
         lastUserSyncTime = Date.now();
       } catch (err) {
         consecutiveFailures++;
-        console.error(\`🔴 [CONNECT FAILED] Could not reach machine at \${config.deviceIp}:\${config.devicePort} (\${err.message}).\`);
+        console.error(\`🔴 [CONNECT FAILED] Could not reach machine at \${config.deviceIp}:\${config.devicePort} (\${err ? err.message : err}).\`);
         isConnected = false;
         try { await zk.disconnect(); } catch (e) {}
 
@@ -324,6 +332,16 @@ async function connectToDevice() {
     await new Promise((resolve) => setTimeout(resolve, config.pollIntervalSeconds * 1000));
   }
 }
+
+process.on('uncaughtException', (err) => {
+  console.warn('⚠️ [SOCKET RECOVERED] Handled unexpected socket error:', err ? err.message : err);
+  isConnected = false;
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.warn('⚠️ [PROMISE RECOVERED] Handled unhandled rejection:', reason ? reason.message || reason : 'Rejection');
+  isConnected = false;
+});
 
 connectToDevice().catch(console.error);
 
