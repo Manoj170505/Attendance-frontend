@@ -121,6 +121,57 @@ try {
         });
     });
   };
+  const { REQUEST_DATA } = require('node-zklib/constants');
+  const { parseTimeToDate } = require('node-zklib/utils');
+
+  function customDecodeRecordData40(recordData) {
+    const b26 = recordData.length > 26 ? recordData.readUInt8(26) : 1;
+    const b30 = recordData.length > 30 ? recordData.readUInt8(30) : 0;
+    const b31 = recordData.length > 31 ? recordData.readUInt8(31) : 0;
+
+    let detectedState = 0;
+    if (b31 >= 1 && b31 <= 5) {
+      detectedState = b31;
+    } else if (b30 >= 1 && b30 <= 5) {
+      detectedState = b30;
+    }
+
+    return {
+      userSn: recordData.readUIntLE(0, 2),
+      deviceUserId: recordData.slice(2, 26).toString('ascii').split('\\0').shift().trim(),
+      verifyType: b26,
+      recordTime: parseTimeToDate ? parseTimeToDate(recordData.readUInt32LE(27)) : new Date(),
+      recordType: detectedState,
+      status: detectedState,
+      state: detectedState,
+      workCode: recordData.length >= 36 ? recordData.readUInt32LE(32) : 0,
+      _rawHex: recordData.toString('hex')
+    };
+  }
+
+  ZKLibTCP.prototype.getAttendances = async function (callbackInProcess = () => { }) {
+    if (this.socket) {
+      try { await this.freeData(); } catch (err) { return Promise.reject(err); }
+    }
+    let data = null;
+    try {
+      data = await this.readWithBuffer(REQUEST_DATA.GET_ATTENDANCE_LOGS, callbackInProcess);
+    } catch (err) {
+      return Promise.reject(err);
+    }
+    if (this.socket) {
+      try { await this.freeData(); } catch (err) { return Promise.reject(err); }
+    }
+    const RECORD_PACKET_SIZE = 40;
+    let recordData = data.data.subarray(4);
+    let records = [];
+    while (recordData.length >= RECORD_PACKET_SIZE) {
+      const record = customDecodeRecordData40(recordData.subarray(0, RECORD_PACKET_SIZE));
+      records.push({ ...record, ip: this.ip });
+      recordData = recordData.subarray(RECORD_PACKET_SIZE);
+    }
+    return { data: records, err: data.err };
+  };
 } catch (patchErr) {
   console.warn('⚠️ Could not apply ZKLibTCP monkey-patch:', patchErr.message);
 }
@@ -264,7 +315,8 @@ async function pushPunchToCloud(record) {
   try {
     const employeeId = String(record.deviceUserId || record.userId || record.pin || record.user_sn || record.uid);
     const punchTime = record.recordTime || record.timestamp || record.time || new Date();
-    const stateCode = String(record.recordType || record.status || record.state || 0);
+    const rawState = record.recordType !== undefined ? record.recordType : (record.status !== undefined ? record.status : (record.state !== undefined ? record.state : 0));
+    const stateCode = String(rawState);
 
     const stateMap = {
       '0': 'CHECK_IN',
@@ -275,12 +327,22 @@ async function pushPunchToCloud(record) {
       '5': 'OVERTIME_OUT'
     };
 
+    const verifyMap = {
+      '1': 'FINGERPRINT',
+      '2': 'PIN_PASSWORD',
+      '3': 'CARD_RFID',
+      '4': 'FINGER_CARD',
+      '15': 'FACE_RECOGNITION',
+      '200': 'PALM_VEIN'
+    };
+    const verifyCode = String(record.verifyType || 1);
+
     const payload = {
       deviceSerial: config.deviceSerial,
       employeeId,
       timestamp: new Date(punchTime).toISOString(),
       state: stateMap[stateCode] || 'CHECK_IN',
-      punchType: 'FINGERPRINT',
+      punchType: verifyMap[verifyCode] || 'FINGERPRINT',
       rawData: \`AGENT_PUNCH: \${employeeId}\\t\${new Date(punchTime).toISOString()}\\t\${stateMap[stateCode] || 'CHECK_IN'}\`
     };
 
@@ -290,7 +352,7 @@ async function pushPunchToCloud(record) {
     });
 
     if (response.data && response.data.success) {
-      console.log(\`✅ [SYNCED TO CLOUD] Employee PIN: \${employeeId} | \${new Date(punchTime).toLocaleTimeString()} | State: \${payload.state}\`);
+      console.log(\`✅ [SYNCED TO CLOUD] Employee PIN: \${employeeId} | \${new Date(punchTime).toLocaleTimeString()} | State: \${payload.state} | Type: \${payload.punchType}\`);
       return true;
     }
   } catch (err) {
