@@ -262,9 +262,17 @@ async function discoverDeviceIp() {
 
 async function pushPunchToCloud(record) {
   try {
-    const employeeId = String(record.deviceUserId || record.userId || record.pin || record.user_sn || record.uid);
-    const punchTime = record.recordTime || record.timestamp || record.time || new Date();
-    const stateCode = String(record.recordType || record.status || record.state || 0);
+    const employeeId = String(record.deviceUserId || record.userId || record.pin || record.user_sn || record.uid || '').trim();
+    if (!employeeId) return false;
+
+    const recordDate = record.recordTime ? new Date(record.recordTime) : (record.timestamp ? new Date(record.timestamp) : null);
+    if (!recordDate || isNaN(recordDate.getTime())) {
+      console.warn(\`⚠️ [SKIP PUNCH] Invalid punch timestamp for employee PIN \${employeeId}\`);
+      return false;
+    }
+
+    const rawState = record.recordType !== undefined ? record.recordType : (record.status !== undefined ? record.status : (record.state !== undefined ? record.state : 0));
+    const stateCode = String(rawState);
 
     const stateMap = {
       '0': 'CHECK_IN',
@@ -275,13 +283,23 @@ async function pushPunchToCloud(record) {
       '5': 'OVERTIME_OUT'
     };
 
+    const verifyMap = {
+      '1': 'FINGERPRINT',
+      '2': 'PIN_PASSWORD',
+      '3': 'CARD_RFID',
+      '4': 'FINGER_CARD',
+      '15': 'FACE_RECOGNITION',
+      '200': 'PALM_VEIN'
+    };
+    const verifyCode = String(record.verifyType || 1);
+
     const payload = {
       deviceSerial: config.deviceSerial,
       employeeId,
-      timestamp: new Date(punchTime).toISOString(),
+      timestamp: recordDate.toISOString(),
       state: stateMap[stateCode] || 'CHECK_IN',
-      punchType: 'FINGERPRINT',
-      rawData: \`AGENT_PUNCH: \${employeeId}\\t\${new Date(punchTime).toISOString()}\\t\${stateMap[stateCode] || 'CHECK_IN'}\`
+      punchType: verifyMap[verifyCode] || 'FINGERPRINT',
+      rawData: \`AGENT_PUNCH: \${employeeId}\\t\${recordDate.toISOString()}\\t\${stateMap[stateCode] || 'CHECK_IN'}\`
     };
 
     const response = await axios.post(\`\${config.cloudApiUrl.replace(/\\/$/, '')}/api/attendance/punch\`, payload, {
@@ -290,7 +308,10 @@ async function pushPunchToCloud(record) {
     });
 
     if (response.data && response.data.success) {
-      console.log(\`✅ [SYNCED TO CLOUD] Employee PIN: \${employeeId} | \${new Date(punchTime).toLocaleTimeString()} | State: \${payload.state}\`);
+      if (response.data.isDuplicate) {
+        return true;
+      }
+      console.log(\`✅ [SYNCED TO CLOUD] Employee PIN: \${employeeId} | \${recordDate.toLocaleTimeString()} | State: \${payload.state} | Type: \${payload.punchType}\`);
       return true;
     }
   } catch (err) {
@@ -361,10 +382,19 @@ async function pollAttendanceLogs() {
       let newPunches = 0;
 
       for (const log of logs.data) {
-        const uniqueKey = \`\${config.deviceSerial}_\${log.deviceUserId}_\${new Date(log.recordTime).getTime()}\`;
+        if (!log || !log.deviceUserId) continue;
+        const recordDate = log.recordTime ? new Date(log.recordTime) : null;
+        if (!recordDate || isNaN(recordDate.getTime())) {
+          continue;
+        }
+
+        const uniqueKey = \`\${config.deviceSerial}_\${log.deviceUserId}_\${recordDate.getTime()}\`;
 
         if (!syncedCache.has(uniqueKey)) {
-          const success = await pushPunchToCloud(log);
+          const success = await pushPunchToCloud({
+            ...log,
+            recordTime: recordDate
+          });
           if (success) {
             syncedCache.add(uniqueKey);
             newPunches++;
