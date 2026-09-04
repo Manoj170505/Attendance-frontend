@@ -121,57 +121,6 @@ try {
         });
     });
   };
-  const { REQUEST_DATA } = require('node-zklib/constants');
-  const { parseTimeToDate } = require('node-zklib/utils');
-
-  function customDecodeRecordData40(recordData) {
-    const b26 = recordData.length > 26 ? recordData.readUInt8(26) : 1;
-    const b30 = recordData.length > 30 ? recordData.readUInt8(30) : 0;
-    const b31 = recordData.length > 31 ? recordData.readUInt8(31) : 0;
-    
-    let detectedState = 0;
-    if (b31 >= 1 && b31 <= 5) {
-      detectedState = b31;
-    } else if (b30 >= 1 && b30 <= 5) {
-      detectedState = b30;
-    }
-
-    return {
-      userSn: recordData.readUIntLE(0, 2),
-      deviceUserId: recordData.slice(2, 26).toString('ascii').split('\\0').shift().trim(),
-      verifyType: b26,
-      recordTime: parseTimeToDate ? parseTimeToDate(recordData.readUInt32LE(27)) : new Date(),
-      recordType: detectedState,
-      status: detectedState,
-      state: detectedState,
-      workCode: recordData.length >= 36 ? recordData.readUInt32LE(32) : 0,
-      _rawHex: recordData.toString('hex')
-    };
-  }
-
-  ZKLibTCP.prototype.getAttendances = async function (callbackInProcess = () => { }) {
-    if (this.socket) {
-      try { await this.freeData(); } catch (err) { return Promise.reject(err); }
-    }
-    let data = null;
-    try {
-      data = await this.readWithBuffer(REQUEST_DATA.GET_ATTENDANCE_LOGS, callbackInProcess);
-    } catch (err) {
-      return Promise.reject(err);
-    }
-    if (this.socket) {
-      try { await this.freeData(); } catch (err) { return Promise.reject(err); }
-    }
-    const RECORD_PACKET_SIZE = 40;
-    let recordData = data.data.subarray(4);
-    let records = [];
-    while (recordData.length >= RECORD_PACKET_SIZE) {
-      const record = customDecodeRecordData40(recordData.subarray(0, RECORD_PACKET_SIZE));
-      records.push({ ...record, ip: this.ip });
-      recordData = recordData.subarray(RECORD_PACKET_SIZE);
-    }
-    return { data: records, err: data.err };
-  };
 } catch (patchErr) {
   console.warn('⚠️ Could not apply ZKLibTCP monkey-patch:', patchErr.message);
 }
@@ -206,20 +155,13 @@ function saveConfig() {
   }
 }
 
-// Load Cache of Synced Punches and Cursor Tracking
+// Load Cache of Synced Punches
 let syncedCache = new Set();
-let latestSyncedTimestamp = 0;
-
 if (fs.existsSync(CACHE_PATH)) {
   try {
     const raw = fs.readFileSync(CACHE_PATH, 'utf8');
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      syncedCache = new Set(parsed);
-    } else if (parsed && typeof parsed === 'object') {
-      syncedCache = new Set(parsed.keys || []);
-      latestSyncedTimestamp = Number(parsed.latestTimestamp || 0);
-    }
+    const arr = JSON.parse(raw);
+    syncedCache = new Set(arr);
   } catch (err) {
     syncedCache = new Set();
   }
@@ -227,11 +169,8 @@ if (fs.existsSync(CACHE_PATH)) {
 
 function saveCache() {
   try {
-    const data = {
-      latestTimestamp: latestSyncedTimestamp,
-      keys: Array.from(syncedCache).slice(-10000)
-    };
-    fs.writeFileSync(CACHE_PATH, JSON.stringify(data, null, 2));
+    const arr = Array.from(syncedCache).slice(-5000);
+    fs.writeFileSync(CACHE_PATH, JSON.stringify(arr, null, 2));
   } catch (err) {
     console.error('⚠️ Error saving synced cache:', err.message);
   }
@@ -321,32 +260,11 @@ async function discoverDeviceIp() {
   return null;
 }
 
-// Fetch the latest timestamp recorded in cloud to avoid fetching old history
-async function initHighWaterMark() {
-  try {
-    const res = await axios.get(\`\${config.cloudApiUrl.replace(/\\/$/, '')}/api/attendance/latest-timestamp?deviceSerial=\${config.deviceSerial}\`, {
-      timeout: 8000
-    });
-    if (res.data && res.data.latestTimestamp) {
-      const serverTime = new Date(res.data.latestTimestamp).getTime();
-      if (serverTime > latestSyncedTimestamp) {
-        latestSyncedTimestamp = serverTime;
-        console.log(\`📍 [HIGH-WATER MARK] Resuming sync from: \${new Date(latestSyncedTimestamp).toLocaleString()}\`);
-      }
-    }
-  } catch (err) {
-    console.log(\`ℹ️ [CURSOR SYNC] Starting fresh sync cursor.\`);
-  }
-}
-
 async function pushPunchToCloud(record) {
   try {
     const employeeId = String(record.deviceUserId || record.userId || record.pin || record.user_sn || record.uid);
     const punchTime = record.recordTime || record.timestamp || record.time || new Date();
-    const punchTimeMs = new Date(punchTime).getTime();
-
-    const rawState = record.recordType !== undefined ? record.recordType : (record.status !== undefined ? record.status : (record.state !== undefined ? record.state : 0));
-    const stateCode = String(rawState);
+    const stateCode = String(record.recordType || record.status || record.state || 0);
 
     const stateMap = {
       '0': 'CHECK_IN',
@@ -357,22 +275,12 @@ async function pushPunchToCloud(record) {
       '5': 'OVERTIME_OUT'
     };
 
-    const verifyMap = {
-      '1': 'FINGERPRINT',
-      '2': 'PIN_PASSWORD',
-      '3': 'CARD_RFID',
-      '4': 'FINGER_CARD',
-      '15': 'FACE_RECOGNITION',
-      '200': 'PALM_VEIN'
-    };
-    const verifyCode = String(record.verifyType || 1);
-
     const payload = {
       deviceSerial: config.deviceSerial,
       employeeId,
       timestamp: new Date(punchTime).toISOString(),
       state: stateMap[stateCode] || 'CHECK_IN',
-      punchType: verifyMap[verifyCode] || 'FINGERPRINT',
+      punchType: 'FINGERPRINT',
       rawData: \`AGENT_PUNCH: \${employeeId}\\t\${new Date(punchTime).toISOString()}\\t\${stateMap[stateCode] || 'CHECK_IN'}\`
     };
 
@@ -382,13 +290,7 @@ async function pushPunchToCloud(record) {
     });
 
     if (response.data && response.data.success) {
-      if (punchTimeMs > latestSyncedTimestamp) {
-        latestSyncedTimestamp = punchTimeMs;
-      }
-      if (response.data.isDuplicate) {
-        return true;
-      }
-      console.log(\`✅ [SYNCED TO CLOUD] Employee PIN: \${employeeId} | \${new Date(punchTime).toLocaleTimeString()} | State: \${payload.state} | Type: \${payload.punchType}\`);
+      console.log(\`✅ [SYNCED TO CLOUD] Employee PIN: \${employeeId} | \${new Date(punchTime).toLocaleTimeString()} | State: \${payload.state}\`);
       return true;
     }
   } catch (err) {
@@ -459,28 +361,20 @@ async function pollAttendanceLogs() {
       let newPunches = 0;
 
       for (const log of logs.data) {
-        const punchTimeMs = new Date(log.recordTime).getTime();
-        const uniqueKey = \`\${config.deviceSerial}_\${log.deviceUserId}_\${punchTimeMs}\`;
+        const uniqueKey = \`\${config.deviceSerial}_\${log.deviceUserId}_\${new Date(log.recordTime).getTime()}\`;
 
-        if (syncedCache.has(uniqueKey)) {
-          continue;
-        }
-
-        if (latestSyncedTimestamp > 0 && punchTimeMs < latestSyncedTimestamp) {
-          syncedCache.add(uniqueKey);
-          continue;
-        }
-
-        const success = await pushPunchToCloud(log);
-        if (success) {
-          syncedCache.add(uniqueKey);
-          newPunches++;
+        if (!syncedCache.has(uniqueKey)) {
+          const success = await pushPunchToCloud(log);
+          if (success) {
+            syncedCache.add(uniqueKey);
+            newPunches++;
+          }
         }
       }
 
       if (newPunches > 0) {
         saveCache();
-        console.log(\`✨ [LIVE PUNCH SYNC] Successfully registered \${newPunches} new biometric punch(es).\\n\`);
+        console.log(\`✨ [BATCH COMPLETE] Synced \${newPunches} new biometric punch(es) to cloud dashboard.\\n\`);
       }
     }
   } catch (err) {
@@ -504,7 +398,6 @@ async function connectToDevice() {
         console.log(\`🟢 [CONNECTED TO DEVICE] Ready to capture live attendance punches!\\n\`);
 
         await sendHeartbeat();
-        await initHighWaterMark();
         await syncUsersFromDevice();
         lastUserSyncTime = Date.now();
       } catch (err) {
