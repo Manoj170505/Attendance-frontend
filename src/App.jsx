@@ -55,8 +55,10 @@ export default function App() {
       if (compRes.success) {
         const availableCompanies = compRes.data || [];
         setCompanies(availableCompanies);
-        if (selectedCompanyId && !availableCompanies.some(c => c.id === selectedCompanyId)) {
-          setSelectedCompanyId(null);
+        if (!selectedCompanyId && availableCompanies.length > 0) {
+          setSelectedCompanyId(availableCompanies[0].id);
+        } else if (selectedCompanyId && !availableCompanies.some(c => c.id === selectedCompanyId)) {
+          setSelectedCompanyId(availableCompanies.length > 0 ? availableCompanies[0].id : null);
         }
       }
       if (devRes.success) setDevices(devRes.data || []);
