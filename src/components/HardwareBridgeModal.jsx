@@ -623,10 +623,11 @@ export default function HardwareBridgeModal({ isOpen, onClose, devices = [], com
 
   const agentConfigJson = JSON.stringify(
     {
+      tenantId: 'company-demo',
       deviceIp: deviceIp || '192.168.137.41',
       devicePort: 4370,
       deviceSerial: selectedDeviceSn || 'NFZ8235301513',
-      cloudApiUrl: cloudApiUrl || 'https://attendance-backend-production-48ca.up.railway.app',
+      cloudApiUrl: 'https://attendance-backend-production-48ca.up.railway.app',
       pollIntervalSeconds: 3
     },
     null,
